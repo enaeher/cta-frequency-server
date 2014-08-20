@@ -1,0 +1,12 @@
+;; Rename this file to config.lisp and place it in the working
+;; directory of the cta process.
+
+(in-package :cta-frequency-server)
+
+;; (<dbname> <username> <password> <host>) for Postgres connection
+
+(defparameter *database-connection-spec* '("cta" "eli" "" "localhost"))
+
+;; port number for REST API
+
+(defparameter *port* 1947)
