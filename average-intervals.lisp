@@ -58,12 +58,15 @@
   (destructuring-bind (interval route direction stop location)
       average-interval
     (json:with-object (s)
-      (json:encode-object-member 'interval interval s)
-      (json:encode-object-member 'route route s)
-      (json:encode-object-member 'direction direction s)
-      (json:encode-object-member 'stop stop s)
+      (json:encode-object-member 'type "Feature" s)
+      (json:as-object-member ('properties s)
+        (json:with-object (s)
+          (json:encode-object-member 'interval interval s)
+          (json:encode-object-member 'route route s)
+          (json:encode-object-member 'direction direction s)
+          (json:encode-object-member 'stop stop s)))
       ;; location is already JSON, so just write it directly to the stream
-      (json:as-object-member ('location s)
+      (json:as-object-member ('geometry s)
         (princ location s)))))
 
 (defun average-intervals-to-json (average-intervals stream)
