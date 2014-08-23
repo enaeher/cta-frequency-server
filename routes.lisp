@@ -20,3 +20,13 @@
                                                         :latest-hour latest-hour
                                                         :dow dow)
                                  stream))))
+
+(hunchentoot:define-easy-handler (routes :uri "/routes")
+    nil
+  (pomo:with-connection *database-connection-spec*
+    (let ((stream (flex:make-flexi-stream (hunchentoot:send-headers) :external-format (flex:make-external-format :utf-8 :eol-style :lf))))
+      (cl-json:with-array (stream)
+        (pomo:with-connection *database-connection-spec*
+          (dolist (row (pomo:query (:select '* :from 'route) :plists))
+            (cl-json:as-array-member (stream)
+              (cl-json:encode-json-plist row stream))))))))
