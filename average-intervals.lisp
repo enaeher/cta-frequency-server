@@ -2,8 +2,8 @@
 
 (s-sql:enable-s-sql-syntax)
 
-(defun %prepare-where-clause (&key stop route direction earliest-date latest-date earliest-tod latest-tod dow)
-  (when (or stop route direction earliest-date latest-date earliest-tod latest-tod dow)
+(defun %prepare-where-clause (&key stop route direction earliest-date latest-date earliest-hour latest-hour dow)
+  (when (or stop route direction earliest-date latest-date earliest-hour latest-hour dow)
     `(:where
       (:and
        ,@(when stop `((:= 'stop ,stop)))
@@ -16,43 +16,36 @@
                 `((:>= 'stop-time (:type ,earliest-date :date))))
                (latest-date
                 `((:<= 'stop-time (:type ,latest-date :date)))))
-       ,@(cond ((and earliest-tod latest-tod)
-                `((:between (:type 'stop-time :time)
-                            (:type ,earliest-tod :time)
-                            (:type ,latest-tod :time))))
-               (earliest-tod
-                `((:>= (:type 'stop-time :time)
-                       ;; a nasty hack, but we cannot apparently
-                       ;; directly cast the local-time string
-                       ;; representation of a timestamp to a time
-                       ;; without first casting it to a Postgres
-                       ;; timestamp
-                       (:type (:type ,earliest-tod :timestamp) :time))))
-               (latest-tod
-                `((:<=  (:type 'stop-time :time)
-                        (:type (:type ,latest-tod :timestamp) :time)))))))))
+       ,@(cond ((and earliest-hour latest-hour)
+                `((:between (:date_part "hour" (:type 'interval-end :time))
+                            ,earliest-hour
+                            ,latest-hour)))
+               (earliest-hour
+                `((:>= (:date_part "hour" 'interval-end) ,earliest-hour)))
+               (latest-hour
+                `((:<=  (:date_part "hour" 'interval-end) ,latest-hour))))))))
 
-(defun %prepare-query (&key stop route direction earliest-date latest-date earliest-tod latest-tod dow)
-  `(:select (:type (/ (:floor (:date_part "epoch" (:avg 'interval))) 60) :integer) ;; get the interval as an integer number of minutes
-            'route 'direction 'name (:type (:ST_AsGeoJSON 'stop-location) :json)
-            :from
-            (:as
-             (:select
-              (:as (:- 'stop-time (:over (:lag 'stop-time) 'w)) 'interval)
-              'route
-              'direction
-              'name
-              'stop-location
-              :from 'stop-event
-              :inner-join 'stop
-              :on (:= 'stop-event.stop 'stop.id)
-              ,@(%prepare-where-clause :stop stop :route route :direction direction
-                                       :earliest-date earliest-date :latest-date latest-date
-                                       :earliest-tod earliest-tod :latest-tod latest-tod :dow dow)
-              :window (:as 'w (:partition-by 'route 'direction 'stop :order-by 'stop-time)))
-             'all-intervals)
-            :where (:not-null 'interval)
-            :group-by 'route 'direction 'name 'stop-location))
+(defun %prepare-query (&key stop route direction earliest-date latest-date earliest-hour latest-hour dow)
+  `(:with (:as 'averages
+               (:select (:as (/ (:avg (:- (:date-part "epoch" 'interval-end)
+                                          (:date-part "epoch" 'interval-start)))
+                                60) 'interval) ;; get the interval as a number of minutes
+                        'stop-route-direction
+                        :from 'stop-interval
+                        ,@(when (or stop route direction)
+                                `(:inner-join 'stop-route-direction :on (:= 'stop-interval.stop-route-direction 'stop-route-direction.id)))
+                        ,@(when route
+                                `(:inner-join 'route :on (:= 'stop-route-direction.route route.id)))
+                        ,@(when stop
+                                `(:inner-join 'stop :on (:= 'stop-route-direction.stop stop.id)))
+                        ,@(%prepare-where-clause :stop stop :route route :direction direction
+                                                 :earliest-date earliest-date :latest-date latest-date
+                                                 :earliest-hour earliest-hour :latest-hour latest-hour :dow dow)
+                        :group-by 'stop-route-direction))
+          (:select 'interval 'route 'direction 'stop.name (:type (:ST_AsGeoJSON 'stop-location) :json)
+                   :from 'averages
+                   :inner-join 'stop-route-direction :on (:= 'averages.stop-route-direction 'stop-route-direction.id)
+                   :inner-join 'stop :on (:= 'stop-route-direction.stop 'stop.id))))
 
 (defun average-interval-to-json (average-interval s)
   (destructuring-bind (interval route direction stop location)
@@ -81,8 +74,8 @@
                                 direction ;; the direction, a string
                                 earliest-date ;; the earliest date, a local-time:date
                                 latest-date ;; the latest date, a local-time:date
-                                earliest-tod ;; the earliest time of day, a local-time:timestamp (the date part is ignored)
-                                latest-tod ;; the latest time of day, a local-time:timestamp (the date part is ignored)
+                                earliest-hour ;; the earliest hour of the day, an integer between 0 and 23
+                                latest-hour ;; the latest hour of the day                                
                                 dow ;; the days of the week to include, a list of integers (Sunday = 0)
                                 )  
   "Returns an average time between buses (along with route,
@@ -99,13 +92,12 @@ STOP, ROUTE, and DIRECTION, if provided, narrow the set of
 stops/routes/directions for which average stop intervals will be
 returned. Using these filters will reduce the number of rows returned.
 
-EARLIEST-DATE, LATEST-DATE, EARLIEST-TOD, LATEST-TOD, and DOW, if
+EARLIEST-DATE, LATEST-DATE, EARLIEST-HOUR, LATEST-HOUR, and DOW, if
 provided, chronologically narrow the list of stop events which will be
 considered in calculating the average interval. Using these filters
 will not affect the number of rows returned, but will affect the
 reported average time between buses."
   (let ((query (%prepare-query :stop stop :route route :direction direction
                                :earliest-date earliest-date :latest-date latest-date
-                               :earliest-tod earliest-tod :latest-tod latest-tod :dow dow)))
-    (with-output-to-string (s)
-      (average-intervals-to-json (pomo:query (s-sql:sql-compile query)) s))))
+                               :earliest-hour earliest-hour :latest-hour latest-hour :dow dow)))
+    (pomo:query (s-sql:sql-compile query))))

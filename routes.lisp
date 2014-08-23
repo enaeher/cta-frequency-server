@@ -6,15 +6,17 @@
      direction
      (earliest-date :parameter-type 'local-time:parse-timestring)
      (latest-date :parameter-type 'local-time:parse-timestring)
-     (earliest-tod :parameter-type 'local-time:parse-timestring)
-     (latest-tod :parameter-type 'local-time:parse-timestring)
+     (earliest-hour :parameter-type 'integer)
+     (latest-hour :parameter-type 'integer)
      (dow :parameter-type '(list integer)))
   (pomo:with-connection *database-connection-spec*
-    (find-average-interval :stop stop
-                           :route route
-                           :direction direction
-                           :earliest-date earliest-date
-                           :latest-date latest-date
-                           :earliest-tod earliest-tod
-                           :latest-tod latest-tod
-                           :dow dow)))
+    (let ((stream (flex:make-flexi-stream (hunchentoot:send-headers) :external-format (flex:make-external-format :utf-8 :eol-style :lf))))
+      (average-intervals-to-json (find-average-interval :stop stop
+                                                        :route route
+                                                        :direction direction
+                                                        :earliest-date earliest-date
+                                                        :latest-date latest-date
+                                                        :earliest-hour earliest-hour
+                                                        :latest-hour latest-hour
+                                                        :dow dow)
+                                 stream))))
