@@ -9,7 +9,7 @@
        ,@(when stop `((:= 'stop ,stop)))
        ,@(when route `((:= 'route ,route)))
        ,@(when direction `((:= 'direction ,direction)))
-       ,@(when dow `((:in (:date_part "dow" 'stop-time) (:set ,@dow))))
+       ,@(when dow `((:in (:date_part "dow" 'interval-end) (:set ,@dow))))
        ,@(cond ((and earliest-date latest-date)
                 `((:between 'stop-time (:type ,earliest-date :date) (:type ,latest-date :date))))
                (earliest-date
