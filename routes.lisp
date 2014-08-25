@@ -8,7 +8,9 @@
      (latest-date :parameter-type 'local-time:parse-timestring)
      (earliest-hour :parameter-type 'integer)
      (latest-hour :parameter-type 'integer)
-     (dow :parameter-type '(list integer)))
+     (dow :parameter-type '(list integer))
+     (maximum-average-interval :parameter-type 'integer)
+     (minimum-average-interval :parameter-type 'integer))
   (pomo:with-connection *database-connection-spec*
     (let ((stream (flex:make-flexi-stream (hunchentoot:send-headers) :external-format (flex:make-external-format :utf-8 :eol-style :lf))))
       (average-intervals-to-json (find-average-interval :stop stop
@@ -18,7 +20,9 @@
                                                         :latest-date latest-date
                                                         :earliest-hour earliest-hour
                                                         :latest-hour latest-hour
-                                                        :dow dow)
+                                                        :dow dow
+                                                        :maximum-average-interval maximum-average-interval
+                                                        :minimum-average-interval minimum-average-interval)
                                  stream))))
 
 (hunchentoot:define-easy-handler (routes :uri "/routes")

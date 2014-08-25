@@ -17,7 +17,7 @@
                (latest-date
                 `((:<= 'stop-time (:type ,latest-date :date)))))
        ,@(cond ((and earliest-hour latest-hour)
-                `((:between (:date_part "hour" (:type 'interval-end :time))
+                `((:between (:date_part "hour" 'interval-end)
                             ,earliest-hour
                             ,latest-hour)))
                (earliest-hour
@@ -25,7 +25,8 @@
                (latest-hour
                 `((:<=  (:date_part "hour" 'interval-end) ,latest-hour))))))))
 
-(defun %prepare-query (&key stop route direction earliest-date latest-date earliest-hour latest-hour dow)
+(defun %prepare-query (&key stop route direction earliest-date latest-date earliest-hour latest-hour
+                         dow maximum-average-interval minimum-average-interval)
   `(:with (:as 'averages
                (:select (:as (/ (:avg (:- (:date-part "epoch" 'interval-end)
                                           (:date-part "epoch" 'interval-start)))
@@ -45,7 +46,14 @@
           (:select 'interval 'route 'direction 'stop.name (:type (:ST_AsGeoJSON 'stop-location) :json)
                    :from 'averages
                    :inner-join 'stop-route-direction :on (:= 'averages.stop-route-direction 'stop-route-direction.id)
-                   :inner-join 'stop :on (:= 'stop-route-direction.stop 'stop.id))))
+                   :inner-join 'stop :on (:= 'stop-route-direction.stop 'stop.id)
+                   ,@(when (or maximum-average-interval minimum-average-interval)
+                           `(:where ,(cond ((and maximum-average-interval minimum-average-interval)
+                                             `(:between 'interval ,minimum-average-interval ,maximum-average-interval))
+                                            (maximum-average-interval
+                                             `(:<= 'interval ,maximum-average-interval))
+                                            (minimum-average-interval
+                                             `(:>= 'interval ,minimum-average-interval))))))))
 
 (defun average-interval-to-json (average-interval s)
   (destructuring-bind (interval route direction stop location)
@@ -77,7 +85,10 @@
                                 earliest-hour ;; the earliest hour of the day, an integer between 0 and 23
                                 latest-hour ;; the latest hour of the day                                
                                 dow ;; the days of the week to include, a list of integers (Sunday = 0)
-                                )  
+                                maximum-average-interval ;; the the maximum average interval (stops which
+                                                         ;; exceed this interval will be excluded from the results)
+                                minimum-average-interval ;; you can probably figure this one out
+                                )
   "Returns an average time between buses (along with route,
 direction, name, and stop location) for each route/direction/stop
 combination which matches the specified filter criteria.
@@ -99,5 +110,7 @@ will not affect the number of rows returned, but will affect the
 reported average time between buses."
   (let ((query (%prepare-query :stop stop :route route :direction direction
                                :earliest-date earliest-date :latest-date latest-date
-                               :earliest-hour earliest-hour :latest-hour latest-hour :dow dow)))
+                               :earliest-hour earliest-hour :latest-hour latest-hour :dow dow
+                               :maximum-average-interval maximum-average-interval
+                               :minimum-average-interval minimum-average-interval)))
     (pomo:query (s-sql:sql-compile query))))
