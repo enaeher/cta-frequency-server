@@ -49,11 +49,11 @@
                    :inner-join 'stop :on (:= 'stop-route-direction.stop 'stop.id)
                    ,@(when (or maximum-average-interval minimum-average-interval)
                            `(:where ,(cond ((and maximum-average-interval minimum-average-interval)
-                                             `(:between 'interval ,minimum-average-interval ,maximum-average-interval))
-                                            (maximum-average-interval
-                                             `(:<= 'interval ,maximum-average-interval))
-                                            (minimum-average-interval
-                                             `(:>= 'interval ,minimum-average-interval))))))))
+                                            `(:between 'interval ,minimum-average-interval ,maximum-average-interval))
+                                           (maximum-average-interval
+                                            `(:<= 'interval ,maximum-average-interval))
+                                           (minimum-average-interval
+                                            `(:>= 'interval ,minimum-average-interval))))))))
 
 (defun average-interval-to-json (average-interval s)
   (destructuring-bind (interval route direction stop location)
