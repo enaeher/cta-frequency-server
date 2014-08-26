@@ -43,10 +43,11 @@
                                                  :earliest-date earliest-date :latest-date latest-date
                                                  :earliest-hour earliest-hour :latest-hour latest-hour :dow dow)
                         :group-by 'stop-route-direction))
-          (:select 'interval 'route 'direction 'stop.name (:type (:ST_AsGeoJSON 'stop-location) :json)
+          (:select 'interval 'route 'route.name 'direction 'stop.name (:type (:ST_AsGeoJSON 'stop-location) :json)
                    :from 'averages
                    :inner-join 'stop-route-direction :on (:= 'averages.stop-route-direction 'stop-route-direction.id)
                    :inner-join 'stop :on (:= 'stop-route-direction.stop 'stop.id)
+                   :inner-join 'route :on (:= 'stop-route-direction.route 'route.id)
                    ,@(when (or maximum-average-interval minimum-average-interval)
                            `(:where ,(cond ((and maximum-average-interval minimum-average-interval)
                                             `(:between 'interval ,minimum-average-interval ,maximum-average-interval))
@@ -56,7 +57,7 @@
                                             `(:>= 'interval ,minimum-average-interval))))))))
 
 (defun average-interval-to-json (average-interval s)
-  (destructuring-bind (interval route direction stop location)
+  (destructuring-bind (interval route route-name direction stop location)
       average-interval
     (json:with-object (s)
       (json:encode-object-member 'type "Feature" s)
@@ -64,6 +65,7 @@
         (json:with-object (s)
           (json:encode-object-member 'interval interval s)
           (json:encode-object-member 'route route s)
+          (json:encode-object-member 'route-name route-name s)
           (json:encode-object-member 'direction direction s)
           (json:encode-object-member 'stop stop s)))
       ;; location is already JSON, so just write it directly to the stream
