@@ -9,7 +9,7 @@
        ,@(when stop `((:= 'stop ,stop)))
        ,@(when route `((:= 'route ,route)))
        ,@(when direction `((:= 'direction ,direction)))
-       ,@(when dow `((:in (:date_part "dow" 'interval-end) (:set ,@dow))))
+       ,@(when dow `((:in (:date-part "dow" 'interval-end) (:set ,@dow))))
        ,@(cond ((and earliest-date latest-date)
                 `((:between 'stop-time (:type ,earliest-date :date) (:type ,latest-date :date))))
                (earliest-date
@@ -17,13 +17,16 @@
                (latest-date
                 `((:<= 'stop-time (:type ,latest-date :date)))))
        ,@(cond ((and earliest-hour latest-hour)
-                `((:between (:date_part "hour" 'interval-end)
-                            ,earliest-hour
-                            ,latest-hour)))
+                (if (> earliest-hour latest-hour)
+                    `((:or (:>= (:date-part "hour" 'interval-end) ,earliest-hour)
+                           (:<= (:date-part "hour" 'interval-end) ,latest-hour)))
+                    `((:between (:date-part "hour" 'interval-end)
+                                ,earliest-hour
+                                ,latest-hour))))
                (earliest-hour
-                `((:>= (:date_part "hour" 'interval-end) ,earliest-hour)))
+                `((:>= (:date-part "hour" 'interval-end) ,earliest-hour)))
                (latest-hour
-                `((:<=  (:date_part "hour" 'interval-end) ,latest-hour))))))))
+                `((:<=  (:date-part "hour" 'interval-end) ,latest-hour))))))))
 
 (defun %prepare-query (&key stop route direction earliest-date latest-date earliest-hour latest-hour
                          dow maximum-average-interval minimum-average-interval)
@@ -43,7 +46,7 @@
                                                  :earliest-date earliest-date :latest-date latest-date
                                                  :earliest-hour earliest-hour :latest-hour latest-hour :dow dow)
                         :group-by 'stop-route-direction))
-          (:select 'interval 'route 'route.name 'direction 'stop.name (:type (:ST_AsGeoJSON 'stop-location) :json)
+          (:select 'interval 'route 'route.name 'direction 'stop.name (:type (:ST-AsGeoJSON 'stop-location) :json)
                    :from 'averages
                    :inner-join 'stop-route-direction :on (:= 'averages.stop-route-direction 'stop-route-direction.id)
                    :inner-join 'stop :on (:= 'stop-route-direction.stop 'stop.id)
